@@ -8,9 +8,8 @@ def matcher_name(src, tar, function):
     sim_score = 1 - function.distance(src, tar)
     return sim_score
 
-
-def load_dict():
-    nltk.data.path.append('/Users/haoran/Documents/nltk_data/')
+def load_dict(nltk_path):
+    nltk.data.path.append(nltk_path)
     from nltk.corpus import wordnet
     dictionary = wordnet
     return dictionary
@@ -185,28 +184,19 @@ def hierarchical_cluster_linkage(features, decision_threshold):
 import pickle
 import json
 import numpy as np
-def cluster_topics_prep():
+
+def cluster_topics_prep(metadata_f, dir):
 
     dictionary = load_dict()
-
-    metadata_f = open('./inputs/metadata_tag_list_translated.json', 'r')
     metadata_set = json.load(metadata_f)
 
-    # print(len(metadata_set))
-
     total_topics_num = len(metadata_set['groups']) + len(metadata_set['tags'])
-
-    # print(total_topics_num)
-    # print(metadata_set['groups'].keys())
 
     groups = list(metadata_set['groups'].keys())
     tags = list(metadata_set['tags'].keys())
 
     groups.sort()
     tags.sort()
-
-    # print(groups[:5])
-    # print(tags[:5])
 
     index_of = 0
     topics_dict = {}
@@ -220,56 +210,31 @@ def cluster_topics_prep():
             continue
         topics_dict[group] = index_of
         index_of += 1
-    # print(groups_new)
-    # print(duplicate_list)
 
     for tag in tags:
         topics_dict[tag] = index_of
         index_of += 1
     topics_new.extend(tags)
 
-
-    # index_of = 5
-    # topics_new = ['business', 'businesses', 'finance and commerce', 'startup business', 'establishmnt']
-
-
-    # print(index_of)
     sim_matrix = np.zeros(shape=(index_of,index_of))
-    # print(sim_matrix.shape)
-
-    dir = '/Users/haoran/Documents/thesis_schema_integration/outputs/'
 
     num_topics = len(topics_new)
     row_index = 0
     for topic in topics_new:
 
-
-        # if row_index <= 274:
-        #     row_index += 1
-        #     continue
-
-
-        # col_index = 0
         for col_index in range(row_index, num_topics, 1):
             target = topics_new[col_index]
-            # topic_vec = topic.split()
-            # target_vec = target.split()
-            # if len(topic_vec) > 1:
-            #     print(topic_vec)
-            # if len(target_vec) > 1:
-            #     print(target_vec)
+
             threshold = 0.34
             score, sims_list = matcher_name_meaning_by_thesaurus(topic, target, dictionary, threshold)
             if score > threshold:
                 print(topic, '<=>', target, ' : ', score)
             sim_matrix[row_index][col_index] = score
-            # col_index += 1
 
         np.savetxt(dir + "topic_sims"+str(row_index)+".csv", sim_matrix, delimiter=",")
         print('done topic #', row_index)
         row_index += 1
 
-    # sim_matrix= np.asarray(sim_matrix)
     np.savetxt(dir+"topic_sims.csv", sim_matrix, delimiter=",")
 
     with open(dir+'topics.txt', 'wb') as fp:
@@ -277,17 +242,11 @@ def cluster_topics_prep():
 
     return
 
-def cluster_topics_prep_matrix():
-    dir = '/Users/haoran/Documents/thesis_schema_integration/outputs/'
+def cluster_topics_prep_matrix(dir):
     sim_matrix = np.loadtxt(dir+"topic_sims756.csv", delimiter=',')
-    # sim_matrix_old = np.loadtxt(dir + "topic_sims274.csv", delimiter=',')
 
     with open(dir+'topics.txt', 'rb') as fp:
         topics_new = pickle.load(fp)
-
-    # for i in range(274+1):
-    #     for j in range(len(topics_new)):
-    #         sim_matrix[i][j] = sim_matrix_old[i][j]
 
     for i in range(len(topics_new)):
         for j in range(len(topics_new)):
@@ -297,12 +256,9 @@ def cluster_topics_prep_matrix():
     np.savetxt(dir + "topic_sims.csv", sim_matrix, delimiter=",")
     print('done saving')
 
-
-
     return
 
-def cluster_topics():
-    dir = '/Users/haoran/Documents/thesis_schema_integration/outputs/'
+def cluster_topics(dir):
     sim_matrix = np.loadtxt(dir+"topic_sims.csv", delimiter=',')
 
     decision_threshold = 0.45
@@ -322,8 +278,6 @@ def cluster_topics():
 
     reverse_topic_cluster = {topics_new[item]: index for index, row in groups_df.iteritems() for item in row}
     topic_cluster = {index: list(row) for index, row in groups_df.iteritems()}
-
-    # print(reverse_topic_cluster)
 
     return groups_df, reverse_topic_cluster, topic_cluster
 
@@ -345,15 +299,13 @@ def open_updated_topics(dir, source_name):
     return False, None
 
 import textwrap
-def print_datasets_with_topic(dataset_metadata_set, dataset_with_topic, dir, brief):
-    dataset_path = '/Users/haoran/Documents/thesis_schema_integration/thesis_project_dataset_clean/'
-    table_stats = '/Users/haoran/Documents/thesis_schema_integration/inputs/dataset_statistics/'
+
+def print_datasets_with_topic(dataset_metadata_set, dataset_with_topic, dir, brief, dataset_path, table_stats):
 
     if not os.path.isfile(dataset_path+dataset_with_topic+'.csv'):
         return False
     if not os.path.isfile(table_stats+dataset_with_topic+'.json'):
         return False
-
 
     print('     dataset: ', dataset_with_topic)
     dataset_existing_tags = dataset_metadata_set[dataset_with_topic]['tags']
@@ -363,7 +315,6 @@ def print_datasets_with_topic(dataset_metadata_set, dataset_with_topic, dir, bri
     dataset_existing_tags = [tag['display_name'] for tag in dataset_existing_tags]
     dataset_existing_groups = [group['display_name'] for group in dataset_existing_groups]
     dataset_notes = [word for word in dataset_notes.split() if "http://" not in word]
-
 
     print('     =existing in original=')
     print('     tags: ', textwrap.fill(str(dataset_existing_tags), 120))
@@ -421,18 +372,17 @@ def input_from_command(add_list, delete_list, topics_new):
     return add_list, delete_list
 
 
-import parse_dataset as pds
+
+import parse_surrey_dataset as pds
 import build_matching_model as bmm
-import iterative_algorithm as ia
 import os.path
-def recommend_labels(dataset_metadata_set, metadata_set, schema_set, datasets_path, datasources_with_tag):
+
+def recommend_labels(dataset_metadata_set, metadata_set, schema_set, datasets_path, datasources_with_tag, dir, dataset_stats):
     import json
     import pandas as pd
 
-    p = ia.p
-    bmm.gather_statistics(schema_set, datasources_with_tag, p.dataset_stats, p.datasets_path)
+    bmm.gather_statistics(schema_set, datasources_with_tag, dataset_stats, datasets_path)
 
-    dir = '/Users/haoran/Documents/thesis_schema_integration/outputs/'
     with open(dir+'topics.txt', 'rb') as fp:
         topics_new = pickle.load(fp)
 
@@ -706,9 +656,9 @@ class LemmatizationWithPOSTagger(object):
 
 
 
-def enrich_homonyms_test():
+def enrich_homonyms_test(nltk_path):
     import nltk
-    nltk.data.path.append('/Users/haoran/Documents/nltk_data/')
+    nltk.data.path.append(nltk_path)
     from nltk.corpus import wordnet
     from nltk.stem.wordnet import WordNetLemmatizer
 
@@ -999,12 +949,11 @@ splitter = Splitter()
 lemmatization_using_pos_tagger = LemmatizationWithPOSTagger()
 
 
-import inflection
 import os.path
 
-def enrich_homonyms(dataset_name, topic, desc, notes, other_topics):
 
-    dir = '/Users/haoran/Documents/thesis_schema_integration/outputs/'
+def enrich_homonyms(dataset_name, topic, desc, notes, other_topics, dir):
+
     fname = dir + '[' + dataset_name + '_' + ' '.join(topic) + '].json'
     if os.path.isfile(fname):
         print('[' + dataset_name + '_' + ' '.join(topic) + '].json', 'already exists')
@@ -1079,20 +1028,7 @@ wordnet = load_dict()
 
 
 
-
-dataset_metadata_f = open('./inputs/datasource_and_tags.json', 'r')
-dataset_metadata_set = json.load(dataset_metadata_f)
-
-metadata_f = open('./inputs/metadata_tag_list_translated.json', 'r')
-metadata_set = json.load(metadata_f)
-
-schema_f = open('./inputs/schema_complete_list.json', 'r')
-schema_set = json.load(schema_f, strict=False)
-
-datasets_path = './thesis_project_dataset_clean/'
-
-
-def enrich_topics_full_run(datasources_with_tag):
+def enrich_topics_full_run(datasources_with_tag, dir):
     for dataset_name in datasources_with_tag:
 
 
@@ -1114,11 +1050,29 @@ def enrich_topics_full_run(datasources_with_tag):
             other_topics = dataset_existing_tags.copy()
             other_topics.remove(topic)
 
-            enrich_homonyms(dataset_name, topic, desc, notes, other_topics)
+            enrich_homonyms(dataset_name, topic, desc, notes, other_topics, dir)
 
     return
 
 if __name__ == "__main__":
+
+    dataset_metadata_f = open('./inputs/datasource_and_tags.json', 'r')
+    dataset_metadata_set = json.load(dataset_metadata_f)
+
+    metadata_f = open('./inputs/metadata_tag_list_translated.json', 'r')
+    metadata_set = json.load(metadata_f)
+
+    schema_f = open('./inputs/schema_complete_list.json', 'r')
+    schema_set = json.load(schema_f, strict=False)
+
+    datasets_path = './thesis_project_dataset_clean/'
+
+    dir = '/Users/haoran/Documents/thesis_schema_integration/outputs/'
+    nltk_path = '/Users/haoran/Documents/nltk_data/'
+
+    dataset_path = '/Users/haoran/Documents/thesis_schema_integration/thesis_project_dataset_clean/'
+    table_stats = '/Users/haoran/Documents/thesis_schema_integration/inputs/dataset_statistics/'
+
     # group = 'environmental services'
     # datasources_with_tag = metadata_set['groups'][group]['sources']
     # print(datasources_with_tag)
@@ -1159,5 +1113,5 @@ if __name__ == "__main__":
     #
     # # topic = 'activities'
 
-    enrich_topics_full_run(datasources_with_tag)
+    enrich_topics_full_run(datasources_with_tag, dir)
 
